@@ -1,0 +1,51 @@
+# Virtual environments
+venv/
+venv_win/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Zone Identifier files (Windows)
+*Zone.Identifier
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Byte-compiled / optimized
+*.pyc
+*.pyo
+
+# Distribution / packaging
+*.whl
+
+# Downloaded test images / generated audio
+lena.jpg
+happy.jpg
+angry.jpg
+*.wav
+
+# Eval harness output (regenerable via --out)
+emotion_module/eval_samples/results*.csv
+
+# Run logs
+logs/
+emotion_module/logs/
+*.log
+
+# Model weights — auto-downloaded on first run (InsightFace / MediaPipe / HSEmotion)
+*.onnx
+*.task
+models/

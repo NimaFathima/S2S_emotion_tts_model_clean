@@ -1,0 +1,14 @@
+text,true_type,true_affect,yn_face,wh_face,neg_face,brow_affective
+You go to the store,yn,neutral,1,0,0,0
+Are you coming with us,yn,neutral,1,0,0,0
+You like this gift,yn,emotional,0,0,0,1
+What happened today,wh,neutral,0,1,0,0
+Why are you so upset,wh,emotional,0,0,0,1
+Where did you put the keys,wh,neutral,0,1,0,0
+I cannot believe this,neg,emotional,0,0,0,1
+I do not agree,neg,neutral,0,0,1,0
+That just happened,statement,emotional,0,0,0,1
+The bus is here,statement,neutral,0,0,0,0
+I am so happy right now,statement,emotional,0,0,0,1
+It is raining outside,statement,neutral,0,0,0,0
+That is wonderful news,statement,emotional,0,0,0,1

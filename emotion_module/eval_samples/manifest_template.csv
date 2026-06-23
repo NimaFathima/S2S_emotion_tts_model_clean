@@ -1,0 +1,8 @@
+clip_path,text,true_type,true_affect
+clips/yn_neutral_01.mp4,You go to the store,yn,neutral
+clips/yn_emotional_01.mp4,You like this gift,yn,emotional
+clips/wh_neutral_01.mp4,What happened today,wh,neutral
+clips/wh_angry_01.mp4,Why are you so upset,wh,emotional
+clips/neg_01.mp4,I do not agree,neg,neutral
+clips/statement_surprise_01.mp4,That just happened,statement,emotional
+clips/statement_neutral_01.mp4,The bus is here,statement,neutral

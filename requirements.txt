@@ -1,0 +1,22 @@
+# Core vision
+opencv-python-headless>=4.9.0
+numpy>=1.24.0
+
+# Face detection (MobileNetV1 0.50 ONNX already in models/ — keep retina-face for fallback)
+insightface>=0.7.3
+retina-face>=0.0.14
+onnxruntime-gpu>=1.17.0
+# No NVIDIA GPU? Use instead:
+# onnxruntime>=1.17.0
+
+# Emotion inference
+hsemotion-onnx>=0.3.1
+
+# NMM landmark classifier
+mediapipe>=0.10.0
+
+# Audio playback (stub only in this sprint — activate for Process 3)
+sounddevice>=0.4.6
+
+# TTS — Chatterbox Streaming (primary)
+chatterbox-tts>=0.1.0

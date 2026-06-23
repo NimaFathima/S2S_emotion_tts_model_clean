@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+venv_win/
+env/
+ENV/
+
+# Windows alternate data streams
+*:Zone.Identifier
+
+# Backup files
+*.backup
+
+# Media / test artifacts
+*.wav
+*.jpg
+*.png
+*.jpeg
+screenshots/
+
+# Models (large files — download at runtime)
+models/*.onnx
+models/*.task
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
