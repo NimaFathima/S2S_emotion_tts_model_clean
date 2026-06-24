@@ -35,7 +35,10 @@ from config.settings import (
     NMM_DAMPEN_ALPHA,
     NMM_CALIBRATION_FRAMES,
     AFFECT_CONFOUND_THRESHOLD,
+    TEMPORAL_GATE,
+    TEMPORAL_GATE_STABLE_FRAMES,
 )
+from processes.brow_gate import BrowTemporalGate
 
 # Use CPU-only MediaPipe by default; can be overridden via env var before import.
 if os.getenv("MEDIAPIPE_DISABLE_GPU") is None:
@@ -94,6 +97,14 @@ class NMMClassifier:
         # Warn only once if blendshapes are unavailable (concordance gate then
         # degrades to the old geometry-only behaviour).
         self._blendshape_warned = False
+
+        # Grammatical-vs-affective brow decision (pure/testable). temporal=False
+        # reproduces the single-frame gate exactly; True adds flicker-suppressing
+        # hysteresis. See processes/brow_gate.py and config TEMPORAL_GATE.
+        self._gate = BrowTemporalGate(
+            BROW_RAISE_THRESHOLD, BROW_FURROW_THRESHOLD, AFFECT_CONFOUND_THRESHOLD,
+            temporal=TEMPORAL_GATE, stable_frames=TEMPORAL_GATE_STABLE_FRAMES,
+        )
 
         try:
             _download_model_if_missing()
@@ -219,6 +230,7 @@ class NMMClassifier:
         if not result.face_landmarks:
             # No face detected — return no flags
             # Do NOT add to calibration buffer (invalid frame)
+            self._gate.reset()   # clear hysteresis so no stale decision carries over
             return NMMContext()
 
         landmarks = result.face_landmarks[0]   # first (and only) face
@@ -251,34 +263,19 @@ class NMMClassifier:
             return NMMContext()
 
         # ── Confound gate: grammatical vs affective brow movement ────────────
-        # Disambiguate by the emotion-specific co-markers, per direction:
+        # The decision lives in BrowTemporalGate (pure/testable). It disambiguates
+        # by the emotion-specific co-markers, per direction:
         #   raise  is grammatical unless SURPRISE/FEAR markers are present
         #   furrow is grammatical unless ANGER markers are present
+        # (surprise/anger None → blendshapes unavailable → assume grammatical).
         scores = self._confound_scores(result)
-        if scores is None:
-            # No blendshapes → preserve geometry-only behaviour (assume grammar)
-            raise_is_grammatical = furrow_is_grammatical = True
-        else:
-            surprise_act, anger_act = scores
-            raise_is_grammatical  = surprise_act < AFFECT_CONFOUND_THRESHOLD
-            furrow_is_grammatical = anger_act    < AFFECT_CONFOUND_THRESHOLD
+        surprise_act, anger_act = (None, None) if scores is None else scores
 
-        # ── 1. Eyebrow raise ratio (Y/N question detection) ──────────────────
-        # Use RELATIVE threshold: subtract calibrated baseline so only
-        # intentional brow raises trigger, not natural resting position.
+        # RELATIVE raise: subtract calibrated baseline so only intentional brow
+        # movements trigger, not the signer's natural resting position.
         relative_raise = avg_raise - self._baseline_raise
-        raw_raise  = relative_raise > BROW_RAISE_THRESHOLD
-        raw_furrow = relative_raise < BROW_FURROW_THRESHOLD
-
-        # Grammatical flags fire only when the emotion confound is absent.
-        is_yn_question = raw_raise  and raise_is_grammatical
-        is_wh_question = raw_furrow and furrow_is_grammatical
-
-        # A brow movement that crossed threshold but carried its emotion confound
-        # is affective — flagged so downstream code keeps the emotion instead of
-        # dampening it as grammar.
-        brow_affective = ((raw_raise and not raise_is_grammatical) or
-                          (raw_furrow and not furrow_is_grammatical))
+        is_yn_question, is_wh_question, brow_affective = self._gate.update(
+            relative_raise, surprise_act, anger_act)
 
         # ── 3. Head shake detection (negation) ───────────────────────────────
         nose_x = landmarks[NOSE_TIP].x

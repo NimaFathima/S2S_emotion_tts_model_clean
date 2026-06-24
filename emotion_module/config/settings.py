@@ -14,6 +14,22 @@ DETECTION_CONFIDENCE_THRESHOLD = 0.65
 FACE_CROP_SIZE                 = 224
 PADDING_RATIO                  = 0.20
 
+# Face-detection backend (single source of truth for the whole pipeline):
+#   "insightface"— RetinaFace/SCRFD via InsightFace. **Default / showcase-safe.**
+#                  On a GPU machine this runs on CUDA and is fast; it is the
+#                  configuration the project has been running, so it is the
+#                  proven-on-hardware choice for a live demo.
+#   "mediapipe"  — face box from the MediaPipe FaceLandmarker mesh. Unifies the
+#                  pipeline on ONE face system (the SAME model the NMM stage
+#                  uses), no extra download. Verified FASTER on CPU (-32% cycle).
+#                  CAVEAT: MediaPipe's Python Tasks API has no GPU delegate on
+#                  Windows, so on a GPU laptop InsightFace (CUDA) may be faster
+#                  than MediaPipe (CPU). Benchmark on the target machine before
+#                  switching:  python benchmark_pipeline.py
+# Crop geometry (padding, CLAHE, resize) is identical for both — only the
+# bounding-box source differs — so switching never changes the emotion crop math.
+FACE_BACKEND = "insightface"
+
 # ── Coasting / tracking loss ──────────────────────────────────────────────
 COASTING_DECAY_FRAMES      = 15
 TRACKING_LOST_HOLD_FRAMES  = 30
@@ -50,6 +66,15 @@ NMM_CALIBRATION_FRAMES =  30     # frames to collect for per-session baseline ca
 #   AFFECT_CONFOUND_THRESHOLD: raise if emotion leaks through as a question;
 #                              lower if real grammatical questions are missed.
 AFFECT_CONFOUND_THRESHOLD = 0.30
+
+# Temporal stability for the brow gate (hysteresis). When True, a change in the
+# grammatical/affective decision must persist TEMPORAL_GATE_STABLE_FRAMES frames
+# before taking effect — suppresses single-frame flicker for steadier output.
+# Default False = exact single-frame behaviour (zero change to the live demo).
+# Provably cannot turn a stable statement into a question; adds ~stable_frames
+# of latency on real events (well under the downstream sustain window).
+TEMPORAL_GATE              = False
+TEMPORAL_GATE_STABLE_FRAMES = 3
 
 # ── NMM sustain gating ───────────────────────────────────────────────────
 # SUSTAIN_FRAMES_REQUIRED: frames an NMM flag must be held before it is

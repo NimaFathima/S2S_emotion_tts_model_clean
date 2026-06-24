@@ -71,7 +71,7 @@ We exploit two of them, plus the text the translation module already produces:
 | Text → sentence type | `processes/audio_consumer.py` → `sentence_type_from_text()` |
 | Fusion (text + gated brow) | `processes/audio_consumer.py` → `resolve_sentence_type()` |
 | Punctuation from resolved type | `processes/audio_consumer.py` → `VAToChatterbox.modify_text()` |
-| Confound gate (blendshapes) | `processes/nmm_classifier.py` → `_confound_scores()` + `classify()` |
+| Confound gate (blendshapes) | `processes/nmm_classifier.py` → `_confound_scores()`; decision in `processes/brow_gate.py` → `BrowTemporalGate` |
 | Conditional emotion dampening | `processes/nmm_classifier.py` → `apply_dampening()` |
 | Thresholds | `config/settings.py` |
 
@@ -91,9 +91,16 @@ question, with no WH-word in the text) is the one case the single-frame gate
 cannot fully resolve: the surprise markers make the gate reject the brow, so the
 question mark may be missed (the emotion is still preserved). This is an inherent
 limit of frame-level disambiguation. It is **measured, not hidden** — see the
-`question_recall` metric in the eval harness. Mitigations (future work): temporal
-onset/offset dynamics (grammatical NMMs are sharply time-locked to the clause;
-affect ramps slower), and richer upstream sentence-type signal.
+`question_recall` metric in the eval harness.
+
+**Why a face-only temporal trick does not fix it:** grammatical NMMs are sharply
+time-locked to the *clause*, but knowing the clause boundary requires timing from
+the gloss/manual stream, which the upstream supplies only as text. A face-only
+attempt to force this recall up would risk the 0% false-question rate, so it is
+deliberately not attempted. The temporal layer that *is* implemented
+(`BrowTemporalGate`, `TEMPORAL_GATE`) is a **stability** measure (hysteresis to
+suppress flicker), not a recall fix. The real fix needs a richer upstream
+sentence-type/timing signal — see the roadmap in [PROJECT_SUMMARY](PROJECT_SUMMARY.md).
 
 ## Validating it
 

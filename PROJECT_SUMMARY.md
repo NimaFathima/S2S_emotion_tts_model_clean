@@ -1,7 +1,14 @@
-# Signet Aid — Nima's Vision Producer Engine (Process 1)
+# Signet Aid — Emotion + Grammar + TTS Module
 
 ## Overview
-This implements Nima's half of Process 1 for the Signet Aid system, which converts ASL sign language to emotionally-coloured spoken audio. Process 1 handles all computer vision work at a locked 30 FPS.
+The Signet Aid emotion module converts ASL facial expression into emotionally-
+coloured spoken audio. It began as the Process-1 vision engine (face detection +
+emotion + NMM at a locked 30 FPS) and now also covers the **affective-vs-
+grammatical separation**, the **emotion→TTS fusion**, evaluation/benchmark
+tooling, and per-run logging. Architecture, design rationale, measured changes,
+and roadmap are in this file plus [README](README.md),
+[EMOTION_GRAMMAR_SEPARATION](EMOTION_GRAMMAR_SEPARATION.md), and
+[BENCHMARKS](BENCHMARKS.md).
 
 ## Components Implemented
 
@@ -17,6 +24,10 @@ This implements Nima's half of Process 1 for the Signet Aid system, which conver
   - The raw ONNX graph outputs anchor offsets rather than pixel coordinates. To resolve this without breaking assignment requirements, the system uses the `insightface.app.FaceAnalysis(name='buffalo_sc')` API. This downloads the exact required MobileNet-0.25 RetinaFace model and automatically applies the necessary Anchor Decoding/NMS math.
   - Successfully utilizes GPU acceleration (`DmlExecutionProvider` / `CUDAExecutionProvider`).
   - Strict confidence threshold of 0.65.
+  - **Pluggable backend** (`create_face_detector()` + `FACE_BACKEND`): the detector
+    is now selectable between `"insightface"` (default, GPU-safe) and `"mediapipe"`
+    (unified — face box from the same FaceLandmarker the NMM stage uses). Both share
+    the identical pad/CLAHE/resize crop pipeline. See Change 1 below and BENCHMARKS.md.
 
 ### 2. Confidence Fail-Safe & Coasting Matrix
 - **File**: `emotion_module/processes/coasting_matrix.py`
@@ -69,10 +80,53 @@ This implements Nima's half of Process 1 for the Signet Aid system, which conver
 ### Benchmarking
 - **NMM Benchmark Script**: Added `benchmark_nmm_detection.py` to compare full-frame vs. crop-based MediaPipe on your target hardware. On the tested environment the speedup was negligible (~0.96×), so the full-frame approach remains the default to preserve accuracy.
 
+## Architecture Improvements (measured & flag-gated)
+Each change was made one at a time against a locked baseline, with a
+"no-degradation gate." Full before/after numbers: **[BENCHMARKS.md](BENCHMARKS.md)**.
+
+### Change 1 — Unify on one face system (`FACE_BACKEND`)
+- New `MediaPipeFaceDetector` derives the face box from the **same**
+  `face_landmarker.task` model the NMM stage already loads — no extra download,
+  one face system. Selectable via `FACE_BACKEND`; crop math identical to InsightFace.
+- **Measured (CPU):** detect stage 54→23 ms, cycle −31.7%; separation accuracy
+  unchanged; emotion-crop bbox IoU 0.83 vs InsightFace.
+- **GPU caveat:** MediaPipe's Python API has no GPU delegate on Windows, while
+  InsightFace runs on CUDA — so the CPU win may not hold on GPU. **Default is
+  `"insightface"`** (proven-on-hardware, showcase-safe). MediaPipe is opt-in,
+  adopt only after benchmarking on the target GPU.
+
+### Change 2 — Temporal stability for the brow gate (`TEMPORAL_GATE`)
+- Gate logic extracted to a pure, testable unit `processes/brow_gate.py`
+  (`BrowTemporalGate`). `temporal=True` adds hysteresis (3-frame) that suppresses
+  single-frame flicker (14→0 flips in tests) and provably cannot turn a stable
+  statement into a question. **Default `False`** = exact prior behaviour.
+- Honest scope: a *stability* win, not a fix for the surprise-toned-Y/N recall
+  miss (that needs clause timing from the gloss stream). Verified by
+  `processes/test_brow_gate.py`.
+
+### Measurement tooling
+- `benchmark_pipeline.py` — per-stage latency / regression guard.
+- `evaluate_nmm.py` — separation-accuracy metrics (false-question rate, recall…).
+- `processes/test_brow_gate.py` — proves the gate refactor is behaviour-preserving.
+
+## Roadmap / Planned Next
+- **Change 3 — TTS prosody:** map valence/arousal to real prosody (pitch, rate,
+  intensity, pausing) instead of Chatterbox's two opaque knobs. Options: SSML
+  (Azure/Google, transparent) or a local controllable model (ECE-TTS/EmoSphere++).
+  Will be **flag-gated with Chatterbox as the fallback default**. Biggest quality
+  win; deferred until after the live showcase to protect demo stability.
+- **Validation clips (data, not code):** record ~30–60 labelled ASL clips and run
+  `evaluate_nmm.py --from-video` to tune `AFFECT_CONFOUND_THRESHOLD` /
+  `BROW_RAISE_THRESHOLD` and report a measured false-question rate. Highest
+  competition value.
+- **North-star (research):** a joint multimodal model (hands + face + pose →
+  translation *and* affect/prosody together), per the EASLT line of work. Needs a
+  signer corpus; long-term.
+
 ## Known Limitations & Integration Notes
 While the system strictly fulfills all assignment requirements, the following architectural constraints were observed:
 
-1. **Architectural Redundancy**: The pipeline calculates face tracking twice per frame (once via RetinaFace for the emotion crop, and again internally by MediaPipe for the NMM landmarks). Benchmarking showed that reusing the RetinaFace crop for MediaPipe provides negligible speedup (~0.96×) while risking landmark accuracy due to lost context. Therefore, the full-frame dual-detection approach remains the default.
+1. **Architectural Redundancy** *(addressed, opt-in)*: The pipeline detects the face twice per frame (InsightFace for the emotion crop + MediaPipe for the NMM landmarks). Change 1 adds a unified `FACE_BACKEND="mediapipe"` that removes the separate InsightFace stage (−31.7% cycle on CPU). It is **not** the default because the win is hardware-dependent (no MediaPipe GPU delegate on Windows) — the dual-detection InsightFace path remains the showcase-safe default.
 2. **Preprocessing Conflict**: Applying CLAHE high-contrast enhancement *before* face detection can artificially darken eyes/features. In poor lighting, this may drop RetinaFace confidence below the 0.65 threshold, prematurely triggering the Coasting Matrix.
 3. **HSEmotion Jitter**: The ONNX emotion model evaluates frames independently without temporal smoothing. Maintaining a perfectly still expression will still result in slight decimal jitter in the V/A scores due to sensor noise.
 
@@ -150,6 +204,9 @@ Three cooperating channels:
 - [x] Affective vs. grammatical separation implemented (text + confound gate + conditional dampening)
 - [x] Evaluation harness (`evaluate_nmm.py`) added with sample features + manifest template
 - [x] Vision-loop crash guard, negation fix, HSEmotion output-layout check
+- [x] Change 1: unified face backend (`FACE_BACKEND`) + latency benchmark (`benchmark_pipeline.py`)
+- [x] Change 2: temporal brow-gate stability (`brow_gate.py`, `TEMPORAL_GATE`) + `test_brow_gate.py`
+- [x] Per-run file logging (`emotion_module/logs/`); before/after numbers tracked in `BENCHMARKS.md`
 - [x] `.gitignore` covers caches, ADS, downloaded images, generated audio, eval output
 - [x] Dead scripts removed (`test_face/face_prep/preprocess/scores.py` — abandoned raw-RetinaFace approach)
 - [x] `README.md` + `EMOTION_GRAMMAR_SEPARATION.md` document architecture, demo modes, evaluation, limitations

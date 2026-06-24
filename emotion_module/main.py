@@ -1,9 +1,9 @@
 """
 main.py — Signet Aid Emotion Module Entry Point
 Three-process architecture:
-  Process 1: Vision Producer  — face detection + emotion inference (Nima's engine)
-  Process 2: Audio Consumer   — VA to Kokoro TTS (stub, next sprint)
-  Process 3: Audio Player     — sounddevice playback (stub, next sprint)
+  Process 1: Vision Producer  — face detection + emotion (V/A) + NMM grammar/affect
+  Process 2: Audio Consumer   — text + emotion fusion → Chatterbox TTS prosody
+  Process 3: Audio Player     — sounddevice streaming playback
 """
 import os, ctypes, time, datetime, logging, multiprocessing
 from multiprocessing import Process, Lock, Array, Queue, Value
@@ -186,7 +186,7 @@ def vision_producer(shared_array, lock, text_queue, run_flag, headless=False):
     from src.shared_memory   import AtomicSharedMemory
 
     # Import Nima's components — read existing file signatures before calling
-    from processes.face_detector      import FaceDetector
+    from processes.face_detector      import create_face_detector
     from processes.coasting_matrix    import CoastingMatrix
     from processes.emotion_inference  import HSEmotionInference, EmotionResult
     from processes.nmm_classifier     import NMMClassifier, NMMContext
@@ -196,7 +196,7 @@ def vision_producer(shared_array, lock, text_queue, run_flag, headless=False):
     # Initialise all components once at process startup
     governor  = FrameGovernor()
     writer    = AtomicSharedMemory(shared_array, lock)
-    detector  = FaceDetector()
+    detector  = create_face_detector()   # backend selected by FACE_BACKEND
     coasting  = CoastingMatrix()
     emotion   = HSEmotionInference()
     nmm       = NMMClassifier()

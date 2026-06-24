@@ -106,14 +106,20 @@ emotional questions, smiling yes/no questions*), label them per
 `eval_samples/manifest_template.csv`, then tune `AFFECT_CONFOUND_THRESHOLD` and
 `BROW_RAISE_THRESHOLD`. Report the before/after `false_question_rate` as evidence.
 
+**Latency / regression guard:** `python benchmark_pipeline.py` times each vision
+stage so architecture changes can be proven not to degrade speed. Measured
+before/after numbers are tracked in [BENCHMARKS.md](BENCHMARKS.md).
+
 ## 🧪 Tests
 ```bash
 cd emotion_module
 python test_integration.py            # 8-test smoke suite (governor, CLAHE, shared mem, …)
 python processes/test_tts.py          # VA→Chatterbox mapping + text/fusion logic (no model)
 python processes/test_tts.py --model  # + actual Chatterbox synthesis to .wav
+python processes/test_brow_gate.py    # brow gate: identity + temporal stability (no model)
 python test_emotion.py                # HSEmotion V/A on real happy/angry images
 python verify_pipeline.py             # full face+emotion+NMM on sample images
+python benchmark_pipeline.py          # per-stage latency / regression guard
 python benchmark_nmm_detection.py     # full-frame vs crop MediaPipe on your hardware
 ```
 
@@ -123,12 +129,14 @@ All tunable constants live in `config/settings.py`:
 | Constant | Default | Description |
 |----------|---------|-------------|
 | `TARGET_FPS` | 30.0 | Locked frame rate |
+| `FACE_BACKEND` | "insightface" | Face detector: "insightface" (GPU-safe default) or "mediapipe" (unified; faster on CPU — benchmark before using on GPU) |
 | `DETECTION_CONFIDENCE_THRESHOLD` | 0.65 | Min face-detection confidence |
 | `COASTING_DECAY_FRAMES` | 15 | Frames for V/A decay on tracking loss |
 | `TRACKING_LOST_HOLD_FRAMES` | 30 | Frames before tracking declared lost |
 | `BROW_RAISE_THRESHOLD` | 0.08 | Relative brow raise → Y/N candidate |
 | `BROW_FURROW_THRESHOLD` | -0.05 | Relative brow furrow → WH candidate |
 | `AFFECT_CONFOUND_THRESHOLD` | 0.30 | Below = grammatical brow; above = affective (see separation doc) |
+| `TEMPORAL_GATE` | False | True = hysteresis on the brow gate (steadier output, ~3-frame latency) |
 | `NMM_DAMPEN_ALPHA` | 0.75 | Emotion dampening for genuine grammatical brows |
 | `NMM_CALIBRATION_FRAMES` | 30 | Per-session neutral-brow baseline window |
 | `EMA_WARMUP_FRAMES` | 15 | Frames before TTS trusts smoothed V/A |
@@ -159,7 +167,19 @@ git-ignored. See [TESTING.md](TESTING.md#logs) for capturing test output too.
   expressiveness scaling** for limited-mobility signers; **one emotion snapshot
   per sentence** (intra-sentence affect not tracked).
 
+## 🛣️ Roadmap
+Changes are made one at a time against a locked baseline (see
+[BENCHMARKS.md](BENCHMARKS.md)) so each is provably non-degrading:
+* **Done — Change 1:** unified face backend (`FACE_BACKEND`); InsightFace default
+  (GPU-safe), MediaPipe opt-in (−32% cycle on CPU).
+* **Done — Change 2:** temporal brow-gate stability (`TEMPORAL_GATE`, default off).
+* **Next — Change 3:** TTS prosody — map valence/arousal to pitch/rate/pausing
+  (SSML or a local controllable model), flag-gated with Chatterbox as fallback.
+  Deferred until after the live showcase.
+* **Data:** record/label ASL clips → tune thresholds → report measured
+  `false_question_rate`. Highest competition value.
+
 ## 📁 Repository
 * `.gitignore` excludes venvs, caches, Windows ADS, downloaded test images,
-  generated `.wav`/eval CSV.
+  generated `.wav`/eval CSV, run logs, latency JSON.
 * All test scripts are guarded with `if __name__ == "__main__"`.

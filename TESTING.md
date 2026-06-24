@@ -70,6 +70,14 @@ python evaluate_nmm.py --from-features eval_samples/sample_features.csv
 - `question recall : 83.3%` (one emotional Y/N is intentionally missed — this is
   the documented trade-off, not a bug)
 
+### 1c. Brow-gate safety (temporal stability)
+```bash
+python processes/test_brow_gate.py
+```
+**PASS:** ends with `All BrowTemporalGate checks passed.` — proves the gate
+refactor is behaviour-preserving (`TEMPORAL_GATE=False` == old logic) and that
+the optional hysteresis reduces flicker without inventing questions.
+
 ---
 
 ## TIER 2 — Model + integration tests (needs internet + models, no camera)
@@ -98,6 +106,19 @@ Downloads a happy and an angry face and prints Valence/Arousal.
 python verify_pipeline.py
 ```
 **PASS:** prints a face detection, V/A scores, and NMM flags without errors.
+
+### 2d. Latency benchmark (optional, regression guard)
+```bash
+python benchmark_pipeline.py
+```
+Times each vision stage and prints the InsightFace-vs-MediaPipe detector
+comparison **for this machine**. Use it to decide `FACE_BACKEND` on a GPU laptop
+(see note below). Tracked numbers live in `BENCHMARKS.md`.
+
+> **Backend default:** `FACE_BACKEND="insightface"` (GPU-safe, proven). The
+> unified `"mediapipe"` backend is faster on CPU but may be slower on a Windows
+> GPU laptop (no MediaPipe GPU delegate). Run 2d on the target machine before
+> switching. The grammar/affect separation is identical either way.
 
 ---
 

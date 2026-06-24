@@ -35,10 +35,12 @@ Thumbs.db
 lena.jpg
 happy.jpg
 angry.jpg
+_bench_face.jpg
 *.wav
 
 # Eval harness output (regenerable via --out)
 emotion_module/eval_samples/results*.csv
+emotion_module/eval_samples/latency*.json
 
 # Run logs
 logs/
